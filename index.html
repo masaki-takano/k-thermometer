@@ -1,0 +1,383 @@
+<html>
+  <head>
+    <script>
+    var SERVICE_UUID = '4fafc201-1fb5-459e-8fcc-c5c9c331914b';
+    var CHARACTERISTIC_UUID = 'beb5483e-36e1-4688-b7f5-ea07361b26a8';
+
+    var CHARACTERISTIC_A_UUID = 0xff01; // Read, Write Notify
+    var CHARACTERISTIC_B_UUID = 0xff02; // Read
+    var CHARACTERISTIC_C_UUID = 0xff03; // Write
+
+    function btnConnectAndView() {
+      console.log("Connect and view...");
+
+      navigator.bluetooth.requestDevice({
+          acceptAllDevices:true,
+          optionalServices:[SERVICE_UUID]
+        }).then(device => {        
+          console.log('device.gatt.connect');
+          return device.gatt.connect();
+        
+        }).then(server =>{
+          console.log('server.getPrimaryService');
+          return server.getPrimaryService(SERVICE_UUID);
+
+        }).then(service => {       
+          return Promise.all([
+            service.getCharacteristic(CHARACTERISTIC_A_UUID),
+            service.getCharacteristic(CHARACTERISTIC_B_UUID),
+            service.getCharacteristic(CHARACTERISTIC_C_UUID)
+          ]);
+
+        }).then((characteristics)  => {
+          characteristics.forEach(characteristic => {
+            console.log('> Characteristic UUID:  ' + characteristic.uuid);
+            console.log('> Broadcast:            ' + characteristic.properties.broadcast);
+            console.log('> Read:                 ' + characteristic.properties.read);
+            console.log('> Write w/o response:   ' +
+              characteristic.properties.writeWithoutResponse);
+            console.log('> Write:                ' + characteristic.properties.write);
+            console.log('> Notify:               ' + characteristic.properties.notify);
+            console.log('> Indicate:             ' + characteristic.properties.indicate);
+            console.log('> Signed Write:         ' +
+              characteristic.properties.authenticatedSignedWrites);
+            console.log('> Queued Write:         ' + characteristic.properties.reliableWrite);
+            console.log('> Writable Auxiliaries: ' +
+              characteristic.properties.writableAuxiliaries);
+          });
+
+        }).catch(error => {
+          console.log('Error: ' + error);
+
+        });
+    }
+
+
+    function btnConnectAndReadValue() {
+      console.log("Connect and read value...");
+
+      navigator.bluetooth.requestDevice({
+          acceptAllDevices:true,
+          optionalServices:[SERVICE_UUID]
+
+        }).then(device => {
+          console.log('device.gatt.connect');
+          return device.gatt.connect();
+        
+        }).then(server => {
+          console.log('server.getPrimaryService');
+          return server.getPrimaryService(SERVICE_UUID);
+        
+        }).then(service => {        
+          console.log('service.getCharacteristic');
+          //return service.getCharacteristic(CHARACTERISTIC_A_UUID);
+          return service.getCharacteristic(CHARACTERISTIC_UUID);
+
+        }).then(characteristic => {
+          console.log('characteristic.readValue');
+          return characteristic.readValue();
+
+        }).then(value => {
+          const decoder = new TextDecoder('utf-8')
+          const str = decoder.decode(value)
+          console.log(str)
+
+        }).catch(error => {
+          console.log('Error: ' + error);
+
+        });
+    }
+
+    function btnConnectAndWriteValue() {
+      console.log("Connect and write value...");
+      console.log(document.getElementById('write-value').value);
+
+      navigator.bluetooth.requestDevice({
+          acceptAllDevices:true,
+          optionalServices:[SERVICE_UUID]
+
+        }).then(device => {
+          console.log('device.gatt.connect');
+          return device.gatt.connect();
+        
+        }).then(server => {
+          console.log('server.getPrimaryService');
+          return server.getPrimaryService(SERVICE_UUID);
+        
+        }).then(service => {        
+          console.log('service.getCharacteristic');
+          return service.getCharacteristic(CHARACTERISTIC_C_UUID);
+
+        }).then(characteristic => {
+          console.log('characteristic.writeValue');
+          let value = document.getElementById('write-value').value;
+          return characteristic.writeValue(new Uint8Array([parseInt(value, 10), 0]));
+
+        }).catch(error => {
+          console.log('Error: ' + error);
+
+        });
+    }
+
+    function btnConnectAndEvent() {
+      console.log("Connect and event...");
+
+      navigator.bluetooth.requestDevice({
+          acceptAllDevices:true,
+          optionalServices:[SERVICE_UUID]
+
+        }).then(device => {
+          console.log('device.gatt.connect');
+          return device.gatt.connect();
+        
+        }).then(server => {
+          console.log('server.getPrimaryService');
+          return server.getPrimaryService(SERVICE_UUID);
+        
+        }).then(service => {        
+          console.log('service.getCharacteristic');
+          return service.getCharacteristic(CHARACTERISTIC_A_UUID);
+
+        }).then(characteristic => {
+          console.log('characteristic.addEventListener');
+
+          const handler = (event) => {
+            console.log(event.target.value.getUint8(0));
+
+            /*
+            const decoder = new TextDecoder('utf-8');
+            const str = decoder.decode(event.target.value);
+            */
+
+          };
+
+          characteristic.addEventListener('characteristicvaluechanged', handler);
+
+          characteristic.startNotifications().catch(error => {
+            characteristic.removeEventListener('characteristicvaluechanged', handler)
+            console.error(error)
+          });
+
+        }).catch(error => {
+          console.log('Error: ' + error);
+
+        });
+    }
+
+    function btnDisconnect() {
+      console.log("Disconect...");
+    }
+    </script>
+
+    <script src="http://d3js.org/d3.v3.min.js" charset="utf-8"></script>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/105/three.min.js"></script>
+    <script>
+      // ページの読み込みを待つ
+      //window.addEventListener('load', init);
+
+      const m5Width = 29; // mm
+      const m5Height = 48; // mm
+      const m5Depth = 14; // mm
+
+      function byteArrayToFloat(data) {
+        var buf = new ArrayBuffer(4);
+        var view = new DataView(buf);
+        data.forEach(function (b, i) {
+          view.setUint8(i, b);
+        });
+        return view.getFloat32(0);
+      }
+
+      function init_scene(characteristic) {
+
+        // サイズを指定
+        const width = 960;
+        const height = 540;
+
+        // シーンを作成
+        const scene = new THREE.Scene();
+
+        // 床を作成
+        const meshFloor = new THREE.Mesh(
+          new THREE.BoxGeometry(2000, 2000, 0.1),
+          new THREE.MeshStandardMaterial({ color: 0x08080FF, roughness: 0.0 })
+        );
+        meshFloor.position.set(0,0,-150);
+        // 影を受け付ける
+        meshFloor.receiveShadow = true;
+        scene.add(meshFloor);
+
+        // テクスチャ
+        var materials = [
+          new THREE.MeshLambertMaterial({map:THREE.ImageUtils.loadTexture("imgs/IMG_1076.jpg"), roughness: 0.0}),
+          new THREE.MeshLambertMaterial({map:THREE.ImageUtils.loadTexture("imgs/IMG_1077.jpg"), roughness: 0.0}),
+          new THREE.MeshLambertMaterial({map:THREE.ImageUtils.loadTexture("imgs/IMG_1079.jpg"), roughness: 0.0}),
+          new THREE.MeshLambertMaterial({map:THREE.ImageUtils.loadTexture("imgs/IMG_1078.jpg"), roughness: 0.0}),
+          new THREE.MeshLambertMaterial({map:THREE.ImageUtils.loadTexture("imgs/IMG_1074.jpg"), roughness: 0.0}),
+          new THREE.MeshLambertMaterial({map:THREE.ImageUtils.loadTexture("imgs/IMG_1075.jpg"), roughness: 0.0}),
+        ];
+        var material = new THREE.MeshFaceMaterial(materials); // マテリアルをセット
+
+        // メッシュを作成
+        const cube = new THREE.Mesh(
+          new THREE.BoxGeometry( m5Width, m5Height, m5Depth ),
+          //new THREE.MeshLambertMaterial( {color: 0x00a0e8, roughness: 0.0} )
+          new THREE.MeshFaceMaterial(materials)
+          //new THREE.MeshStandardMaterial({ map: texture })
+          );
+        cube.castShadow = true;
+
+        // 回転
+        /*
+        var quaternion = cube.quaternion;
+        var target = new THREE.Quaternion();
+        var axis = new THREE.Vector3(0, 1, 0).normalize(); // 絶対値が1なので、normalize()はなくてもOK
+        target.setFromAxisAngle(axis, Math.PI / 10);
+        quaternion.multiply(target);
+        */
+
+        scene.add(cube);
+
+        // アンビエント
+        /*
+        const ambientLight = new THREE.AmbientLight(0xffffff , 1.0);
+        scene.add(ambientLight);
+        */
+
+        // ディレクショナルライト
+        /*
+        const directionalLight = new THREE.DirectionalLight(0xffffff, 1.0);
+        //directionalLight.position.set(100, 100, 50);
+        //directionalLight.target = cube;
+        scene.add(directionalLight);
+        */
+
+        const light = new THREE.HemisphereLight(0x888888, 0x8080FF, 1.0);
+        scene.add(light);
+
+        const pointLight = new THREE.PointLight(0xFFFFFF);
+        // ライトに影を有効にする
+        pointLight.castShadow = true;
+        pointLight.shadow.mapSize.width = 2048;
+        pointLight.shadow.mapSize.height = 2048;
+        pointLight.position.set(30, 30, 100);
+        scene.add(pointLight);
+
+        // カメラを作成
+        const camera = new THREE.PerspectiveCamera(45, width / height, 1, 1000);
+        camera.position.set(0, 0, 150);
+        camera.lookAt(new THREE.Vector3(0, 0, 0));
+
+        // レンダラーを作成
+        const renderer = new THREE.WebGLRenderer({
+          canvas: document.querySelector('#myCanvas'),
+          antialias: true,
+        });
+        renderer.setClearColor(0xefefef);
+        renderer.setPixelRatio(window.devicePixelRatio);
+        renderer.setSize(width, height);
+        renderer.shadowMap.enabled = true;
+        //renderer.shadowMap.type = THREE.PCFShadowMap;
+
+        tick();
+
+        // 毎フレーム時に実行されるループイベントです
+        function tick() {
+          // 一応読めるが、エラーも多いので、無駄
+          characteristic.readValue().then(value => {
+            var q0 = byteArrayToFloat([value.getUint8(3) ,value.getUint8(2), value.getUint8(1), value.getUint8(0)]);
+            var q1 = byteArrayToFloat([value.getUint8(7) ,value.getUint8(6), value.getUint8(5), value.getUint8(4)]);
+            var q2 = byteArrayToFloat([value.getUint8(11) ,value.getUint8(10), value.getUint8(9), value.getUint8(8)]);
+            var q3 = byteArrayToFloat([value.getUint8(15) ,value.getUint8(14), value.getUint8(13), value.getUint8(12)]);
+
+            cube.rotation.setFromQuaternion(new THREE.Quaternion(q1, q2, q3, q0));
+          }).catch(error => {
+            //console.log('Error: ' + error);
+          });
+
+          // レンダリング
+          requestAnimationFrame(tick);
+
+          renderer.render(scene, camera);
+        }
+      }
+
+      function init_ble() {
+        return new Promise((resolve, reject) => {
+          navigator.bluetooth.requestDevice({
+            acceptAllDevices:true,
+            optionalServices:[SERVICE_UUID]
+
+          }).then(device => {
+            console.log('device.gatt.connect');
+            return device.gatt.connect();
+
+          }).then(server => {
+            console.log('server.getPrimaryService');
+            return server.getPrimaryService(SERVICE_UUID);
+
+          }).then(service => {
+            console.log('service.getCharacteristic');
+            return service.getCharacteristic(CHARACTERISTIC_A_UUID);
+
+          }).then(characteristic => {
+            console.log('characteristic.readValue');
+            resolve(characteristic);
+          }).catch(error => {
+            console.log('Error: ' + error);
+            reject(error);
+          });
+        });
+      }
+
+      function init() {
+        init_ble()
+        .then(characteristic => init_scene(characteristic))
+        .catch(error => {});
+      }
+
+      window.onload = function () {
+      document.getElementById("button-d").addEventListener("click", init, false);
+      document.getElementById("button-v").addEventListener("click", btnConnectAndView, false);
+      document.getElementById("button-a").addEventListener("click", btnConnectAndReadValue, false);
+      document.getElementById("button-c").addEventListener("click", btnConnectAndWriteValue, false);
+      document.getElementById("button-e").addEventListener("click", btnConnectAndEvent, false);
+    };
+
+    </script>
+  </head>
+
+  <body>
+    <canvas id="myCanvas"></canvas>
+
+    <div>
+      <button type="button" id="button-d">Connect and draw</button>
+    </div>
+
+    <div>
+      <button type="button" id="button-v">Connect and view</button>
+    </div>
+
+    <p>
+
+    <div>
+      <button type="button" id="button-a">Connect and read value</button>
+    </div>
+
+    <p>
+
+    <div>
+      <input type="text" id="write-value" value="50"></input>
+      <button type="button" id="button-c">Connect and write value</button>
+    </div>
+
+    <p>
+
+    <div>
+      <button type="button" id="button-e">Connect and event</button>
+    </div>
+  </body>
+</html>
+
+  

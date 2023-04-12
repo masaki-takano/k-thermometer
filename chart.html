@@ -1,0 +1,171 @@
+<html>
+  <head>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/moment.js/2.13.0/moment.min.js"></script>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/2.9.4/Chart.min.js" integrity="sha512-d9xgZrVZpmmQlfonhQUvTR7lMPtO7NkZMkA0ABN3PHCbKA5nqylQ/yWlFAyY6hYgdF1Qh6nYiuADWwKB4C2WSw==" crossorigin="anonymous"></script>
+
+    <script>
+      var SERVICE_UUID = '4fafc201-1fb5-459e-8fcc-c5c9c331914b';
+      var CHARACTERISTIC_UUID = 'beb5483e-36e1-4688-b7f5-ea07361b26a8';
+
+      var myLineChart;
+
+      function addData(t ,y) {
+          myLineChart.data.labels.push(t);
+          myLineChart.data.datasets[0].data.push(y);
+          myLineChart.update();
+      }
+
+      function btnConnectAndEvent(e) {
+        document.getElementById("button-start").style.display = 'none';
+
+        console.log("Connect and event...");
+
+        navigator.bluetooth.requestDevice({
+            //acceptAllDevices:true,
+            filters: [
+              { services: [SERVICE_UUID] },
+              { namePrefix: "K-Thermometer" }
+            ]
+
+          }).then(device => {
+            console.log('device.gatt.connect');
+            return device.gatt.connect();
+          
+          }).then(server => {
+            console.log('server.getPrimaryService');
+            return server.getPrimaryService(SERVICE_UUID);
+          
+          }).then(service => {        
+            console.log('service.getCharacteristic');
+            return service.getCharacteristic(CHARACTERISTIC_UUID);
+
+          }).then(characteristic => {
+            console.log('characteristic.addEventListener');
+
+            // BLEイベントハンドラ
+            const handler = (event) => {
+              const decoder = new TextDecoder('utf-8');
+              const str = decoder.decode(event.target.value);
+              console.log(str);
+
+              var pos = str.split(',');
+              addData(pos[0], pos[1]);
+            };
+
+            characteristic.addEventListener('characteristicvaluechanged', handler);
+
+            characteristic.startNotifications().catch(error => {
+              characteristic.removeEventListener('characteristicvaluechanged', handler)
+              console.error(error)
+            });
+
+          }).catch(error => {
+            console.log('Error: ' + error);
+
+          });
+      }
+
+      function btnDisconnect() {
+        console.log("Disconect...");
+      }
+
+      window.onload = function () {
+        document.getElementById("button-start").addEventListener("click", btnConnectAndEvent, false);
+
+        var ctx = document.getElementById('myChart');
+
+        myLineChart = new Chart(ctx, {
+          
+          "type":"line",
+          
+          "data":{
+            "labels":[],
+            "datasets":[
+              {
+                "label":"sensor",
+                "data":[],
+                "fill":false,
+                "borderColor":"rgb(192, 72, 72)",
+                "lineTension":0.1
+              },
+              {
+                "label":"reference",
+                  "data":[],
+                  "fill":false,
+                  "borderColor":"rgb(75, 192, 192)",
+                  "lineTension":0.1
+              },
+            ]
+          },
+
+          options: {
+            title: {
+              text: 'Coffee Roast'
+            },
+            scales: {
+              xAxes: [{
+
+                //ここで軸を時間を設定する
+                type: 'time',
+                time: {
+                  parser: 'h:mm:ss',
+                  unit: 'minute',
+                  stepSize: 1,
+                  displayFormats: {
+                    'minute': 'mm:ss'
+                  }
+                },
+
+                scaleLabel: {
+                  display: true,
+                  labelString: 'Time'
+                }
+              }],
+              yAxes: [{
+                scaleLabel: {
+                  display: true,
+                  labelString: 'Temperature'
+                }
+              }]
+            },
+          },
+
+          //"options":{},
+        });
+
+        // サンプルデータをロード
+        const request = new XMLHttpRequest(); // HTTPでファイルを読み込む
+        request.addEventListener('load', (event) => {
+            const response = event.target.responseText;
+           
+            var lines = response.split('\n');
+            for (var i = 0; i < lines.length; i++) {
+              var cols = lines[i].split(',');
+              myLineChart.data.datasets[1].data.push({
+                x: cols[0],
+                y: cols[1],
+              });
+              
+            }
+            myLineChart.update();            
+
+          });
+        request.open('GET', 'data001.csv', true);
+        request.send();
+
+      };  // end of script
+
+    </script>
+  </head>
+
+  <body>
+    <div>
+      <button type="button" id="button-start">Start</button>
+    </div>
+
+    <canvas id="myChart" width="100%" height="50%"></canvas>
+  </body>
+</html>
+
+  
